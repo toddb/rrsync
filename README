@@ -1,17 +1,21 @@
-RRSync (Ruby RSync)
+rrsyncfolders aka rrsync
 
-RRsync is a Rsync backup script that's written in Ruby. It performs the simple operation of syncing the contents of a given folder to a remote location via SSH. The script allows you to control the level of output (log files, screen output) , it is ideal for calling from a cron or launchd.
+http://github.com/toddb/rrsync/tree/master
 
-The backups are structured as such:
+This script is a fork on rrsync by RichGuk: http://github.com/RichGuk/rrsync/tree/master
 
-/remote/location/current - The current folder contains the the latest clone of the intended backup folder.
-/remote/location/backup_dir - The backup directory, which by default is the current day (monday, tuesday, etc) contains the difference to current since it was last run. So it will contain any new files, any files that were deleted.
+This synchronise folders script was written so that I can back up my machine via rsync to two places. One, my flash drive and, two, my remote server. I have two main scenarios: I have files that I need to "synchronise" (two-way) with my flash drive because I add items both to my machine and my flash drive (on other machines). I also want to take straight "backups" (one-way). There is nothing flash in this script and I would have written it without rrsync. Hence forking it.
 
+If you want a GUI version there is always Cyberduck (on OSX). What I did notice is that it won't delete files and I need it to. 
 
-NOTICE: I take no responsibility for any data loss, so please test before using with test data!!!!!
+== Main features:
 
-Please feel free to contribute to this script and I'll accept any changes for the good.
-==============================================================================
+ - Backup (one-way) and Synchronise (two-way) modes
+ - Multiple backup regimes configurable on the same script
+ - Rake-enabled (and thus can also be run from TextMate)
+ - Easy dry run mode
+ - Logging if you need it
+ - Can extend output type (plain text, html)
 
 == How to install
 
@@ -19,87 +23,119 @@ A few things are required for this script to function correctly.
 	* Ruby 1.8.x
 	* rsync 3.0.x
 	* ssh command
-	
+	* rrsync configuration
+
 Rsync on OS X 10.5:
 
 On OS X 10.5 the default rsync is out of date and missing a few used options you may use macports to install the latest.
-	
+
 	sudo port install rsync
-	
+
 To install the script simply copy it to where ever you wish to run the script from. Make sure its executable by issuing the following:
 
 	sudo chmod 755 rrsync.rb
 
+Make sure you then update the configuration file (see below)
+
+	cp config.sample.rb config.rb
+	vi config.rb [see config options below]
 	
+If you have IGNORE option:
+
+   cp IGNORE.sample IGNORE
+   vi IGNORE  [add files - any problems see the rsync help]
+
 == How to use
 
-You may run the script by issuing the following command:
+    rake (default: dryrun)
+    rake all
 
-	ruby rrsync.rb
-or (providing it has execute permissions)
-	./rrsync.rb
+= Rake options (rake -T)
 
-See examples/ for examples of crontab and launchd settings.	
+rake all          # Alias for sync:all
+rake dryrun       # Alias for sync:dry  [DEFAULT]
+rake sync:all     # Synchronise and backup all folders
+rake sync:backup  # Backup folders
+rake sync:config  # List all folders in the configuration
+rake sync:dry     # Dryrun all folders
+rake sync:sync    # Synchronise folders
 
-= Configuration options
+Hence the configuration file object:
 
-= SSH_APP
-This is the command to use for ssh, full path should not be needed but might be wise.
+== Configuration Options per sync
 
-= RSYNC_APP
-This is the command to use for rsync, full path should not be needed but might be wise.
+= Mandatory
+:base   => from, to
+:backup => location1, location2, ...
+:sync   => location1, location2, ...
 
-= EXCLUDE_FILE
-This is the location of a file which contents of files and directories to exclude from the backup.
+:base   => %w(~/Documents/ USB-FLASH/backup/testing),
+:backup => %w(src home agile-2008),
+:sync   => %w(agile)
 
-The file should be formatted with each file or directory on it's own line. The list needs to be relative to DIR_TO_BACKUP.
+= Optional (defaults)
 
-= DIR_TO_BACKUP
-This is the location folder you wish to backup to a remote machine for example: /Users/foo
+:logger => nil,               [eg UserLogger.new - see below to setup a new Logger]
+:dryrun => true,
+:cmd    => "rsync -a -u -v"   [ie RsyncCmd.new - this allows local folder backups by default]
 
-If you wish to have the contents of the remote backup like /remote/backup/documents instead of /remote/backup/foo/documents then you need to add a trailing slash to this command, for example: /Users/foo/
+== CONFIG file sample
 
-= LOG_FILE
-This is the location to put the log file, if you wish not to create a log file you may leave this blank. You can also achieve this with the SLIENT option (see below for more details).
+This sample has two regimes. 
 
-= LOG_AGE
-This is how long to keep log files for you can supply daily, weekly or monthly here.
+= Regime 1: local
+ - Backup between a folder on the main drive and the USB 
+ - one-way back-up for 3 folders (this is a straight backup because, say, I don't do source dev to the USB)
+ - two-way sync for 2 folders (so if you update either the local or the USB both will have a copy)
 
-= EMPTY_DIR
-This is NEEDED to clean out the previous weeks backup folder. The script will create the folder and delete it after.
+= Regime 2: remote
+ - same as above but it is a straight backup to a remote server (so that if my machine and USB are both stolen I'm still okay - don't laugh it almost happened)
 
-You can choose the location of this folder (needs write permission), the default of /tmp/empty_dir is normally OK.
+= NOTE on private keys
+You will probably need to make sure that your private key (if used) has the correct perms (chmod 0600)
 
-= SSH_USER
-The ssh user you wish to use for the remote machine example: rich would be turned into rich@SSH_SERVER.
+= FINALLY
+ - I load both of these into the CONFIG.opts so that Rake can process them
 
-= SSH_SERVER
-The hostname or ip of the remote machine where the backups are copied too for example: 192.168.1.2 would be turned into SSH_USER@192.168.1.2
+=Sample
 
-= SSH_PORT
-If you run ssh on a non-standard port you may supply that here.
+local = {
+    :base   => %w(~/Documents/ USB-DRIVE/backup/),
+    :backup => %w(src home docs),
+    :sync   => %w(agile pdfs)
+      }
+      
+remote = {
+    :base   => %w(~/Documents/ /home/.server/user/backup),
+    :backup => %w(src home docs agile pdfs)
+    :cmd    => RsyncCmd.new({
+              :sshuser   =>  'username',
+              :sshserver =>  'myserver.domain.com',
+              :privatekey => '~/.ssh/id_rsa,
+              :rsynopts  =>  RsyncCmd.new().default_backup_remote_opts
+              })
+      }
 
-= BACKUP_ROOT
-This is the location to store the backups on the remote machine. You  do not need to add the current or BACKUP_DIR part, example: /media/backups/macbook
+CONFIG.opts << local << remote
 
-= BACKUP_DIR
-This can normally be left as default. This controls where to put the differences to current by default this is monday, tuesday, etc...
+== Creating logging to a file
 
-= RSYNC_VERBOSE
-This allows you to control how much output rsync gives, this does not effect if logs are produced (see SLIENT and DEBUG) you may use: --progress, -v, -vv, -vvv here to give different levels of output (note: --progress may clutter the logs)
+To configure logging, pass in a :logger when configuring the backup regime. This logger is based on rrysnc's original approach wrapping a start and stop around the output. Make sure the script has the correct permissions to write to the log file.
 
-= RSYNC_OPTS
-This can normally be left as default. Change this if you know what you're doing this allows you to change the options that are passed to rsync (see man rsync).
+= Example
+local = {
+    :base   => %w(~/Documents/ USB-DRIVE/backup/),
+    :backup => %w(src home docs),
+    :sync   => %w(agile pdfs),
+	:logger => UserLogger.new()
+      }
 
-= DEBUG
-If enabled then output will be shown to the screen and will NOT be outputed to the log file. This is useful for testing and debugging any problems you might have.
+= Options
 
-This can be either: true or false
-
-= SLIENT
-If you wish to have no output at all (screen and log files) then set this to true.
-
-This can be either: true or false
+:file => '/var/log/rrsync.log',
+:age => 'daily',
+:debug => true,    #If true output to screen else output is sent to log file.
+:silent => false   #Total silent = no log or screen output.
 
 ==============================================================================
 
@@ -107,12 +143,9 @@ This can be either: true or false
 
 	* This is not supported on WINDOWS! I don't think it will work at all!
 	* Only supports SSH as the transfer protocol
-	* Doesn't allow much in the way of the default directory structure of current folder and a backup (normally monday, tuesday, etc)
 	
 == Contact/contribute
 
 Feel free to fork and send me pull requests I will most likely merge the changes into the main repo.
-
-You can contact me at http://27smiles.com or drop me an email at rich -at- 27smiles.com.
 
 ==============================================================================

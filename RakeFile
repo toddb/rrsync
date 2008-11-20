@@ -1,0 +1,42 @@
+require 'rake'
+require 'pp'
+require 'lib/synchfolders'
+require 'config'
+
+namespace :sync do
+  
+  desc "Dryrun all folders"
+  task :dry do
+     CONFIG.opts.each { |files| SyncFolders.new(files).run(:dryrun) }
+  end
+  
+  desc "List all folders in the configuration"
+  task :config do
+    CONFIG.opts.each { |files| pp SyncFolders.new(files).opts }
+  end
+  
+  desc "Synchronise and backup all folders"
+  task :all do
+    CONFIG.opts.each { |files| SyncFolders.new(files).run(:all) }
+  end
+  
+  desc "Backup folders"
+  task :backup do
+    CONFIG.opts.each { |files| SyncFolders.new(files).run(:backup)  }   
+  end
+
+  desc "Synchronise folders"
+  task :sync do
+    CONFIG.opts.each { |files| SyncFolders.new(files).run(:sync)  }   
+  end
+    
+end
+
+desc "Alias for sync:dry"
+task :dryrun => 'sync:dry'
+
+desc "Alias for sync:all"
+task :all => 'sync:all'
+
+task :default => :dryrun
+
